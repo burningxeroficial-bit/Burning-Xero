@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Burning Xero | Tactical Audio Interface</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&family=Teko:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-orange: #ff4500;
+            --neon-glow: #ff6a00;
+            --glass-bg: rgba(0, 0, 0, 0.94);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --flicker-c: rgba(255, 255, 255, 0.01);
+        }
+
+        /* --- MODO VISIÓN NOCTURNA (NV) --- */
+        .night-vision {
+            --primary-orange: #00ff41; 
+            --neon-glow: #00ff41;
+            filter: matrix(1, 0, 0, 1, 0, 0) sepia(1) hue-rotate(85deg) brightness(1.1);
+        }
+        .night-vision::after {
+            content: "";
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(0deg, rgba(0,0,0,0.1) 0px, rgba(0,0,0,0.1) 1px, transparent 1px, transparent 2px);
+            pointer-events: none; z-index: 9999;
+        }
+
+        /* --- MODO PÁNICO (SOBRECARGA) --- */
+        .panic-mode {
+            animation: screenShake 0.1s infinite !important;
+            filter: matrix(1, 0, 0, 1, 0, 0) sepia(1) hue-rotate(-50deg) brightness(1.2) contrast(1.5) !important;
+        }
+        @keyframes screenShake { 0% { transform: translate(1px, 1px); } 50% { transform: translate(-1px, -1px); } 100% { transform: translate(0); } }
+
+        /* --- CONFIGURACIÓN BASE --- */
+        * { margin: 0; padding: 0; box-sizing: border-box; cursor: crosshair; }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            color: #fff;
+            background-color: #000;
+            background-image: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)), url('fondo-lp.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            overflow: hidden;
+            transition: filter 0.3s;
+        }
+
+        /* MARCO PERIMETRAL TÉCNICO */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 20px; left: 20px; right: 20px; bottom: 20px;
+            border: 1px solid rgba(255, 69, 0, 0.15);
+            pointer-events: none;
+            z-index: 90;
+        }
+
+        /* EFECTO GLITCH DE TRANSICIÓN */
+        #glitch-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #fff; opacity: 0; pointer-events: none; z-index: 2000;
+        }
+        .glitch-active { animation: flash 0.15s steps(2) infinite; }
+        @keyframes flash { 0% { opacity: 0.1; background: var(--primary-orange); } 50% { opacity: 0.2; background: #000; } 100% { opacity: 0; } }
+
+        /* NAVEGACIÓN */
+        header {
+            background: rgba(0, 0, 0, 0.98);
+            padding: 20px 0;
+            position: fixed;
+            width: 100%;
+            z-index: 1000;
+            border-bottom: 1px solid var(--primary-orange);
+        }
+
+        nav ul { display: flex; justify-content: center; list-style: none; }
+        nav ul li a {
+            font-family: 'Teko', sans-serif;
+            font-size: 1.6rem;
+            color: #888;
+            text-decoration: none;
+            text-transform: uppercase;
+            margin: 0 25px;
+            cursor: pointer;
+            transition: 0.3s;
+            letter-spacing: 3px;
+        }
+        nav ul li a:hover { color: var(--primary-orange); text-shadow: 0 0 15px var(--primary-orange); }
+
+        /* CONTROLES TÁCTICOS */
+        .nv-switch {
+            position: fixed; top: 90px; left: 30px; z-index: 1100;
+            font-family: 'Orbitron'; font-size: 0.7rem; color: var(--primary-orange);
+            display: flex; align-items: center; gap: 10px; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        #panic-btn {
+            position: fixed; top: 85px; right: 30px; z-index: 1100;
+            color: var(--primary-orange); font-size: 1.8rem; cursor: pointer;
+            animation: pulsePanic 2s infinite; transition: 0.3s;
+        }
+        #panic-btn:hover { color: #fff; transform: scale(1.1); text-shadow: 0 0 20px #ff0000; }
+        @keyframes pulsePanic { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        /* WIDGET COUNTDOWN */
+        .show-countdown {
+            position: fixed; bottom: 40px; right: 40px; z-index: 100;
+            background: rgba(0,0,0,0.8); border-right: 4px solid var(--primary-orange);
+            padding: 15px; font-family: 'Orbitron', sans-serif; text-align: right;
+            backdrop-filter: blur(10px);
+        }
+        .show-label { color: var(--primary-orange); font-size: 0.6rem; letter-spacing: 3px; animation: pulseCountdown 1.5s infinite; }
+        .timer { font-size: 1.1rem; color: #fff; letter-spacing: 2px; }
+        @keyframes pulseCountdown { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* SECCIÓN INICIO (HUD COMPLETO REPARADO) */
+        .hero {
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            z-index: 20;
+            transition: 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .hud-side {
+            position: absolute; font-family: 'Orbitron', sans-serif; font-size: 0.65rem;
+            color: var(--primary-orange); letter-spacing: 2px; opacity: 0.8; line-height: 2;
+        }
+        .left-side { left: 50px; text-align: left; border-left: 2px solid var(--primary-orange); padding-left: 15px; }
+        .right-side { right: 50px; text-align: right; border-right: 2px solid var(--primary-orange); padding-right: 15px; }
+
+        .central-circle {
+            width: clamp(280px, 40vw, 420px);
+            height: clamp(280px, 40vw, 420px);
+            border-radius: 50%;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 80px rgba(0, 0, 0, 1), 0 0 30px rgba(255, 69, 0, 0.2);
+            border: 2px solid var(--primary-orange);
+            position: relative;
+        }
+
+        .central-circle img { 
+            width: 85%; height: 85%; object-fit: contain;
+            filter: drop-shadow(0 0 10px rgba(255, 69, 0, 0.5));
+            animation: glitch 6s infinite;
+        }
+
+        @keyframes glitch {
+            0%, 90%, 100% { transform: translate(0); }
+            92% { transform: translate(-2px, 2px); filter: hue-rotate(90deg); }
+            94% { transform: translate(2px, -2px); filter: contrast(150%); }
+            96% { transform: translate(-2px, -2px); }
+        }
+
+        .loading-bar-wrap {
+            width: 250px; height: 4px; background: rgba(255, 255, 255, 0.05);
+            margin-top: 40px; position: relative; overflow: hidden;
+        }
+        .loading-bar-fill {
+            position: absolute; width: 60%; height: 100%;
+            background: var(--primary-orange); box-shadow: 0 0 10px var(--primary-orange);
+            animation: load 3s infinite linear;
+        }
+        @keyframes load { from { left: -100%; } to { left: 100%; } }
+
+        /* ECUALIZADOR REPARADO */
+        .eq-container { display: flex; gap: 6px; height: 60px; align-items: flex-end; margin-top: 20px; }
+        .bar { width: 4px; background: var(--primary-orange); box-shadow: 0 0 15px var(--neon-glow); animation: eq 0.8s infinite ease-in-out; }
+        @keyframes eq { 0%, 100% { height: 10px; opacity: 0.3; } 50% { height: 50px; opacity: 1; } }
+
+        /* PANELES */
+        .content-panel {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100vh;
+            background: var(--glass-bg); backdrop-filter: blur(30px);
+            display: none; flex-direction: column; justify-content: center;
+            align-items: center; z-index: 500; padding: 100px 20px 40px 20px;
+        }
+        .active-panel { display: flex; animation: slideIn 0.5s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: scale(1.1); } to { opacity: 1; transform: scale(1); } }
+
+        /* BANDA (3x2 A COLOR REPARADO) */
+        .band-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        .member-card { text-align: center; }
+        .member-card img {
+            width: 100%; height: 320px; 
+            object-fit: contain;
+            border: 1px solid var(--primary-orange);
+            background: rgba(0,0,0,0.6);
+            transition: 0.4s;
+        }
+        .member-card:hover img { border-color: #fff; box-shadow: 0 0 25px var(--primary-orange); transform: translateY(-5px); }
+        .member-card h4 { margin-top: 15px; font-family: 'Teko', sans-serif; font-size: 1.8rem; color: #fff; }
+        .member-card p { color: var(--primary-orange); font-size: 0.8rem; letter-spacing: 3px; }
+
+        /* SETLIST MASIVO (2 COLUMNAS REPARADO) */
+        .setlist-container {
+            width: 100%; max-width: 1000px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px 40px;
+            font-family: 'Orbitron', sans-serif;
+            border: 1px solid rgba(255, 69, 0, 0.2);
+            padding: 30px;
+            background: rgba(0,0,0,0.5);
+            overflow-y: auto;
+            max-height: 70vh;
+        }
+        .set-item {
+            display: flex; justify-content: space-between; padding: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.3s;
+            font-size: 0.8rem;
+        }
+        .set-item:hover { background: var(--primary-orange); color: #000; transform: scale(1.03); padding-left: 20px; }
+        .set-item span:last-child { color: rgba(255,255,255,0.3); font-size: 0.6rem; }
+
+        /* VIDEO */
+        .video-box {
+            max-width: 95vw; width: 90%; height: 70vh; 
+            border: 2px solid var(--primary-orange); 
+            background: #000; box-shadow: 0 0 50px rgba(255, 69, 0, 0.4); 
+            overflow: hidden;
+        }
+        video { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+        .social-link {
+            color: #fff;
+            text-decoration: none;
+            transition: 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .social-link:hover { color: var(--primary-orange); text-shadow: 0 0 10px var(--primary-orange); }
+
+        /* --- OPTIMIZACIÓN MÓVIL (REGLAS ADICIONALES) --- */
+        @media (max-width: 950px) {
+            .band-grid, .setlist-container { 
+                grid-template-columns: 1fr; /* Una columna en móvil */
+                padding: 10px; 
+            }
+            .hud-side, .show-countdown, .nv-switch, #panic-btn, .loading-bar-wrap { 
+                display: none; /* Ocultamos elementos que saturan el celular */
+            }
+            .central-circle { 
+                width: 280px; height: 280px; /* Reducimos tamaño del logo */
+            }
+            header { padding: 10px 0; }
+            nav ul li a { 
+                font-size: 1.1rem; 
+                margin: 5px 10px; 
+            }
+            .member-card img { height: 250px; }
+            .content-panel { padding-top: 80px; }
+        }
+    </style>
+</head>
+<body onclick="unlockAudio()">
+
+    <div id="glitch-overlay"></div>
+
+    <div class="nv-switch" onclick="toggleNV()" title="ACTIVAR/DESACTIVAR VISIÓN NOCTURNA">
+        <i class="fas fa-eye"></i> <span id="nv-status">NV_MODE: OFF</span>
+    </div>
+    
+    <div id="panic-btn" onclick="triggerPanic()">
+        <i class="fas fa-skull"></i>
+    </div>
+
+    <header>
+        <nav>
+            <ul>
+                <li><a onclick="show('home')">Inicio</a></li>
+                <li><a onclick="show('banda')">La Banda</a></li>
+                <li><a onclick="show('setlist')">Setlist</a></li>
+                <li><a onclick="show('video')">Video</a></li>
+                <li><a onclick="show('contacto')">Contacto</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <div class="show-countdown">
+        <div class="show-label">PRÓXIMA_TRANSMISIÓN</div>
+        <div id="timer" class="timer">00D 00H 00M 00S</div>
+    </div>
+
+    <div class="main-content">
+        <section id="hero-section" class="hero">
+            <div class="hud-side left-side">
+                SISTEMA: ACTIVO<br>ENCRIPTACIÓN: 128-BIT<br>BANDA: BURNING XERO<br>RESP_FREC: 20HZ-20KHZ
+            </div>
+            <div class="hud-side right-side">
+                UBICACIÓN: 19.4326° N<br>FECHA: JULIO 2026<br>SEÑAL: TOTAL<br>HYBRID_THEORY_OS
+            </div>
+
+            <div style="display:flex; flex-direction:column; align-items:center;">
+                <div class="central-circle">
+                    <img src="logo-burning.png" alt="Burning Xero">
+                </div>
+                
+                <div class="eq-container">
+                    <div class="bar"></div>
+                    <div class="bar" style="animation-delay: 0.1s"></div>
+                    <div class="bar" style="animation-delay: 0.2s"></div>
+                    <div class="bar" style="animation-delay: 0.3s"></div>
+                    <div class="bar" style="animation-delay: 0.4s"></div>
+                </div>
+
+                <div class="loading-bar-wrap">
+                    <div class="loading-bar-fill"></div>
+                </div>
+                <p style="font-family:'Orbitron'; font-size:0.6rem; color:var(--primary-orange); margin-top:10px; letter-spacing:5px;">SINCRONIZANDO ARCHIVOS...</p>
+            </div>
+        </section>
+
+        <section id="panel-banda" class="content-panel">
+            <h2 style="font-family:'Orbitron'; color:var(--primary-orange); margin-bottom:40px; font-size:2rem; letter-spacing:10px;">LINE-UP</h2>
+            <div class="band-grid">
+                <div class="member-card"><img src="miembro1.jpg"><h4>Voz Principal</h4><p>THE LEGACY</p></div>
+                <div class="member-card"><img src="miembro2.jpg"><h4>Voz, Guitarra, DJ y Pads</h4><p>THE HYBRID MIND</p></div>
+                <div class="member-card"><img src="miembro3.jpg"><h4>Bajo</h4><p>THE FOUNDATION</p></div>
+                <div class="member-card"><img src="miembro4.jpg"><h4>Voz y Teclados</h4><p>THE ATMOSPHERE</p></div>
+                <div class="member-card"><img src="miembro5.jpg"><h4>Guitarra Principal</h4><p>THE RIFFS</p></div>
+                <div class="member-card"><img src="miembro6.jpg"><h4>Batería</h4><p>THE POWER BEAT</p></div>
+            </div>
+        </section>
+
+        <section id="panel-setlist" class="content-panel">
+            <h2 style="font-family:'Orbitron'; color:var(--primary-orange); margin-bottom:30px; letter-spacing:10px;">REPERTORIO [SETLIST]</h2>
+            <div class="setlist-container">
+                <div class="set-item"><span>01. PAPER CUT</span><span>EXE</span></div><div class="set-item"><span>11. PUSHING ME AWAY</span><span>BIN</span></div>
+                <div class="set-item"><span>02. ONE STEP CLOSER</span><span>LOG</span></div><div class="set-item"><span>12. DON'T STAY</span><span>EXE</span></div>
+                <div class="set-item"><span>03. POINTS OF AUTHORITY</span><span>SYS</span></div><div class="set-item"><span>13. SOMEWHERE I BELONG</span><span>LOG</span></div>
+                <div class="set-item"><span>04. CRAWLING</span><span>SRC</span></div><div class="set-item"><span>14. LYING FROM YOU</span><span>SYS</span></div>
+                <div class="set-item"><span>05. RUNAWAY</span><span>BIN</span></div><div class="set-item"><span>15. FAINT</span><span>SRC</span></div>
+                <div class="set-item"><span>06. BY MYSELF</span><span>DATA</span></div><div class="set-item"><span>16. FIGURE.09</span><span>BIN</span></div>
+                <div class="set-item"><span>07. IN THE END</span><span>EXE</span></div><div class="set-item"><span>17. BREAKING THE HABIT</span><span>DATA</span></div>
+                <div class="set-item"><span>08. A PLACE FOR MY HEAD</span><span>LOG</span></div><div class="set-item"><span>18. FROM THE INSIDE</span><span>EXE</span></div>
+                <div class="set-item"><span>09. FORGOTTEN</span><span>SYS</span></div><div class="set-item"><span>19. NUMB</span><span>LOG</span></div>
+                <div class="set-item"><span>10. CURE FOR THE ITCH</span><span>SRC</span></div><div class="set-item"><span>20. GIVEN UP</span><span>SYS</span></div>
+            </div>
+        </section>
+
+        <section id="panel-video" class="content-panel">
+            <h2 style="font-family:'Orbitron'; color:var(--primary-orange); margin-bottom:20px;">BROADCAST</h2>
+            <div class="video-box"><video id="promoVideo" controls poster="logo-burning.png"><source src="promo.mp4" type="video/mp4"></video></div>
+        </section>
+
+        <section id="panel-contacto" class="content-panel">
+            <div style="border: 2px solid var(--primary-orange); padding: 60px; background: rgba(0,0,0,0.8); text-align: center; box-shadow: 0 0 30px var(--primary-orange);">
+                <h2 style="font-family:'Orbitron'; color:var(--primary-orange); margin-bottom:25px;">CONTRATACIONES</h2>
+                <p style="font-size: 2.5rem; font-family:'Teko'; color:#fff; margin-bottom: 20px;">booking@burningxero.com</p>
+                <a href="https://www.instagram.com/burningxero?igsh=MXMza2J5YzBqb21ldQ==" target="_blank" class="social-link"><i class="fab fa-instagram"></i> INSTAGRAM</a>
+            </div>
+        </section>
+
+    </div>
+
+    <audio id="sfx-panic" src="distorsion.mp3"></audio>
+
+    <script>
+        // DESBLOQUEO DE AUDIO
+        let audioUnlocked = false;
+        function unlockAudio() { if(!audioUnlocked) { const sfx = document.getElementById('sfx-panic'); sfx.play().then(() => { sfx.pause(); sfx.currentTime = 0; audioUnlocked = true; }); } }
+
+        function show(target) {
+            const overlay = document.getElementById('glitch-overlay');
+            overlay.classList.add('glitch-active');
+            
+            setTimeout(() => {
+                const panels = ['panel-banda', 'panel-contacto', 'panel-video', 'panel-setlist'];
+                const hero = document.getElementById('hero-section');
+                const video = document.getElementById('promoVideo');
+                
+                panels.forEach(p => document.getElementById(p).classList.remove('active-panel'));
+                hero.style.display = target === 'home' ? 'flex' : 'none';
+                video.pause();
+
+                if (target !== 'home') {
+                    document.getElementById('panel-' + target).classList.add('active-panel');
+                    if (target === 'video') { video.currentTime = 0; video.play().catch(e => console.log("Audio bloqueado")); }
+                }
+                overlay.classList.remove('glitch-active');
+            }, 250);
+        }
+
+        function updateTimer() {
+            const showDate = new Date('July 3, 2026 21:00:00').getTime();
+            const now = new Date().getTime();
+            const diff = showDate - now;
+            const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const s = Math.floor((diff % (1000 * 60)) / 1000);
+            document.getElementById('timer').innerHTML = `${d}D ${h < 10 ? '0'+h : h}H ${m < 10 ? '0'+m : m}M ${s < 10 ? '0'+s : s}S`;
+        }
+        setInterval(updateTimer, 1000);
+
+        function toggleNV() {
+            document.body.classList.toggle('night-vision');
+            document.getElementById('nv-status').innerText = document.body.classList.contains('night-vision') ? "NV_ON" : "NV_OFF";
+        }
+
+        function triggerPanic() {
+            const body = document.body; const sfx = document.getElementById('sfx-panic');
+            body.classList.add('panic-mode');
+            if(sfx) { sfx.currentTime = 0; sfx.play().catch(e=>console.log("Audio bloqueado")); }
+            setTimeout(() => { body.classList.remove('panic-mode'); }, 1500);
+        }
+    </script>
+</body>
+</html>
